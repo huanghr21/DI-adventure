@@ -1,4 +1,5 @@
 torch==1.10.0
+intel-openmp  # Fix PyTorch DLL loading issue on Windows
 git+https://github.com/opendilab/DI-engine@main
 gym-super-mario-bros==7.4.0
 gym==0.25.1
