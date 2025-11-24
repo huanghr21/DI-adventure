@@ -1,5 +1,5 @@
 torch==1.10.0
-git+http://github.com/opendilab/DI-engine@main
+git+https://github.com/opendilab/DI-engine@main
 gym-super-mario-bros==7.4.0
 gym==0.25.1
 opencv-python==4.6.0.66
