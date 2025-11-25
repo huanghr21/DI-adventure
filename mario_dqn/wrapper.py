@@ -1,18 +1,25 @@
 """
 wrapper定义文件
 """
-from typing import Union, List, Tuple, Callable
-from ding.envs.env_wrappers import MaxAndSkipWrapper, WarpFrameWrapper, ScaledFloatFrameWrapper, FrameStackWrapper, \
-    FinalEvalRewardEnv
-import gym
-import numpy as np
-import cv2
-from pytorch_grad_cam import GradCAM
-import torch
-from ding.torch_utils import to_ndarray
+
+import copy
 import os
 import warnings
-import copy
+from typing import Callable, List, Tuple, Union
+
+import cv2
+import gym
+import numpy as np
+import torch
+from ding.envs.env_wrappers import (
+    FinalEvalRewardEnv,
+    FrameStackWrapper,
+    MaxAndSkipWrapper,
+    ScaledFloatFrameWrapper,
+    WarpFrameWrapper,
+)
+from ding.torch_utils import to_ndarray
+from pytorch_grad_cam import GradCAM
 
 
 # 粘性动作wrapper
@@ -27,7 +34,7 @@ class StickyActionWrapper(gym.ActionWrapper):
         - ``p_sticky``: possibility to select the last action
     """
 
-    def __init__(self, env: gym.Env, p_sticky: float=0.25):
+    def __init__(self, env: gym.Env, p_sticky: float = 0.25):
         super().__init__(env)
         self.p_sticky = p_sticky
         self.last_action = 0
@@ -59,7 +66,7 @@ class SparseRewardWrapper(gym.Wrapper):
         obs, reward, done, info = self.env.step(action)
         dead = True if reward == -15 else False
         reward = 0
-        if info['flag_get']:
+        if info["flag_get"]:
             reward = 15
         if dead:
             reward = -15
@@ -83,21 +90,21 @@ class CoinRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        reward += (info['coins'] - self.num_coins) * 10
-        self.num_coins = info['coins']
+        reward += (info["coins"] - self.num_coins) * 10
+        self.num_coins = info["coins"]
         return obs, reward, done, info
 
 
 # CAM相关，不需要了解
 def dump_arr2video(arr, video_folder):
-    fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+    fourcc = cv2.VideoWriter_fourcc(*"MP4V")
     fps = 6
     size = (256, 240)
-    out = cv2.VideoWriter(video_folder + '/cam_pure.mp4', fourcc, fps, size)
-    out1 = cv2.VideoWriter(video_folder + '/obs_pure.mp4', fourcc, fps, size)
-    out2 = cv2.VideoWriter(video_folder + '/merged.mp4', fourcc, fps, size)
+    out = cv2.VideoWriter(video_folder + "/cam_pure.mp4", fourcc, fps, size)
+    out1 = cv2.VideoWriter(video_folder + "/obs_pure.mp4", fourcc, fps, size)
+    out2 = cv2.VideoWriter(video_folder + "/merged.mp4", fourcc, fps, size)
     for frame, obs in arr:
-        frame = (255 * frame).astype('uint8').squeeze(0)
+        frame = (255 * frame).astype("uint8").squeeze(0)
         frame_c = cv2.resize(cv2.applyColorMap(frame, cv2.COLORMAP_JET), size)
         out.write(frame_c)
 
@@ -114,7 +121,9 @@ def get_cam(img, model):
     input_tensor = torch.from_numpy(img).unsqueeze(0)
 
     # Construct the CAM object once, and then re-use it on many images:
-    cam = GradCAM(model=model, target_layers=target_layers, use_cuda=True)
+    # cam = GradCAM(model=model, target_layers=target_layers, use_cuda=True)
+    # 新版本的 GradCAM 不再需要 use_cuda 参数,会自动检测设备
+    cam = GradCAM(model=model, target_layers=target_layers)
     targets = None
 
     # You can also pass aug_smooth=True and eigen_smooth=True, to apply smoothing.
@@ -132,7 +141,6 @@ def capped_cubic_video_schedule(episode_id):
 
 
 class RecordCAM(gym.Wrapper):
-
     def __init__(
         self,
         env,
@@ -213,7 +221,10 @@ class RecordCAM(gym.Wrapper):
 
         if self.recording:
             self.video_recorder.append(
-                (get_cam(observations, model=self.cam_model), copy.deepcopy(self.env.render(mode='rgb_array')))
+                (
+                    get_cam(observations, model=self.cam_model),
+                    copy.deepcopy(self.env.render(mode="rgb_array")),
+                )
             )
             self.recorded_frames += 1
             if self.video_length > 0:
@@ -221,7 +232,7 @@ class RecordCAM(gym.Wrapper):
                     self.close_video_recorder()
             else:
                 if not self.is_vector_env:
-                    if dones or infos['time'] < 250:
+                    if dones or infos["time"] < 250:
                         self.close_video_recorder()
                 elif dones[0]:
                     self.close_video_recorder()
