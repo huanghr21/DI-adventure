@@ -95,6 +95,156 @@ class CoinRewardWrapper(gym.Wrapper):
         return obs, reward, done, info
 
 
+# our new wrappers
+# 位置进度奖励wrapper
+class PositionRewardWrapper(gym.Wrapper):
+    """
+    Overview:
+        Reward agent for moving right, encourage exploration
+    Interface:
+        ``__init__``, ``step``, ``reset``
+    Properties:
+        - env (:obj:`gym.Env`): the environment to wrap.
+        - ``reward_scale``: scale factor for position reward
+    """
+
+    def __init__(self, env: gym.Env, reward_scale: float = 0.01):
+        super().__init__(env)
+        self.max_x_pos = 0
+        self.reward_scale = reward_scale
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        # 当到达新的最远位置时给予奖励
+        if info["x_pos"] > self.max_x_pos:
+            reward += (info["x_pos"] - self.max_x_pos) * self.reward_scale
+            self.max_x_pos = info["x_pos"]
+        return obs, reward, done, info
+
+    def reset(self):
+        self.max_x_pos = 0
+        return self.env.reset()
+
+
+# 时间惩罚wrapper
+class TimePenaltyWrapper(gym.Wrapper):
+    """
+    Overview:
+        Apply small penalty for staying still
+    Interface:
+        ``__init__``, ``step``, ``reset``
+    Properties:
+        - env (:obj:`gym.Env`): the environment to wrap.
+        - ``penalty``: penalty value for not moving
+    """
+
+    def __init__(self, env: gym.Env, penalty: float = -0.01):
+        super().__init__(env)
+        self.penalty = penalty
+        self.last_x_pos = 0
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        # 如果位置没变化，施加惩罚
+        if info["x_pos"] == self.last_x_pos:
+            reward += self.penalty
+        self.last_x_pos = info["x_pos"]
+        return obs, reward, done, info
+
+    def reset(self):
+        self.last_x_pos = 0
+        return self.env.reset()
+
+
+# 无进展提前结束wrapper
+class NoProgressWrapper(gym.Wrapper):
+    """
+    Overview:
+        End episode early if no progress for too long
+    Interface:
+        ``__init__``, ``step``, ``reset``
+    Properties:
+        - env (:obj:`gym.Env`): the environment to wrap.
+        - ``max_steps_no_progress``: max steps allowed without progress
+    """
+
+    def __init__(self, env: gym.Env, max_steps_no_progress: int = 200):
+        super().__init__(env)
+        self.max_steps = max_steps_no_progress
+        self.steps_no_progress = 0
+        self.max_x_pos = 0
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+
+        if info["x_pos"] > self.max_x_pos:
+            self.max_x_pos = info["x_pos"]
+            self.steps_no_progress = 0
+        else:
+            self.steps_no_progress += 1
+
+        # 长时间无进展则结束
+        if self.steps_no_progress >= self.max_steps:
+            done = True
+            reward -= 5  # 小惩罚
+
+        return obs, reward, done, info
+
+    def reset(self):
+        self.steps_no_progress = 0
+        self.max_x_pos = 0
+        return self.env.reset()
+
+
+# 奖励裁剪wrapper
+class RewardClipWrapper(gym.RewardWrapper):
+    """
+    Overview:
+        Clip reward to specified range for stable training
+    Interface:
+        ``__init__``, ``reward``
+    Properties:
+        - env (:obj:`gym.Env`): the environment to wrap.
+        - ``min_r``: minimum reward value
+        - ``max_r``: maximum reward value
+    """
+
+    def __init__(self, env: gym.Env, min_r: float = -1.0, max_r: float = 1.0):
+        super().__init__(env)
+        self.min_r = min_r
+        self.max_r = max_r
+
+    def reward(self, reward):
+        return np.clip(reward, self.min_r, self.max_r)
+
+
+# 动作平滑wrapper
+class ActionSmoothWrapper(gym.ActionWrapper):
+    """
+    Overview:
+        Reduce action jitter for smoother behavior
+    Interface:
+        ``__init__``, ``action``
+    Properties:
+        - env (:obj:`gym.Env`): the environment to wrap.
+        - ``repeat_prob``: probability to repeat last action
+    """
+
+    def __init__(self, env: gym.Env, repeat_prob: float = 0.5):
+        super().__init__(env)
+        self.repeat_prob = repeat_prob
+        self.last_action = 0
+
+    def action(self, action):
+        # 有一定概率重复上一个动作
+        if np.random.random() < self.repeat_prob and action == self.last_action:
+            return_action = action
+        else:
+            return_action = action
+        self.last_action = action
+        return return_action
+
+
 # CAM相关，不需要了解
 def dump_arr2video(arr, video_folder):
     fourcc = cv2.VideoWriter_fourcc(*"MP4V")

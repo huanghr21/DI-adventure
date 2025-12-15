@@ -1,23 +1,24 @@
 """
 config 配置文件，这一部分主要包含一些超参数的配置，大家只用关注 model 中的参数即可
 """
+
 from easydict import EasyDict
 
 mario_dqn_config = dict(
     # 实验结果的存放路径
-    exp_name='exp/mario_dqn_seed0',
+    exp_name="exp/mario_dqn_seed0",
     # mario环境相关
     env=dict(
         # 用来收集经验（experience）的mario环境的数目
         # 请根据机器的性能自行增减
-        collector_env_num=8,
+        collector_env_num=4,
         # 用来评估智能体性能的mario环境的数目
         # 请根据机器的性能自行增减
-        evaluator_env_num=8,
+        evaluator_env_num=4,
         # 评估轮次
         n_evaluator_episode=8,
         # 训练停止的分数（3000分可以认为通关1-1，停止训练以节省计算资源）
-        stop_value=3000
+        stop_value=3000,
     ),
     policy=dict(
         # 是否使用 CUDA 加速（必要）
@@ -49,27 +50,35 @@ mario_dqn_config = dict(
             target_update_freq=500,
         ),
         # 收集经验相关，每次收集96个transition进行一次训练
-        collect=dict(n_sample=96, ),
+        collect=dict(
+            n_sample=96,
+        ),
         # 评估相关，每2000个iteration评估一次
-        eval=dict(evaluator=dict(eval_freq=2000, )),
+        eval=dict(
+            evaluator=dict(
+                eval_freq=2000,
+            )
+        ),
         other=dict(
             # epsilon-greedy算法
             eps=dict(
-                type='exp',
-                start=1.,
+                type="exp",
+                start=1.0,
                 end=0.05,
                 decay=250000,
             ),
             # replay buffer大小
-            replay_buffer=dict(replay_buffer_size=100000, ),
+            replay_buffer=dict(
+                replay_buffer_size=100000,
+            ),
         ),
     ),
 )
 mario_dqn_config = EasyDict(mario_dqn_config)
 main_config = mario_dqn_config
 mario_dqn_create_config = dict(
-    env_manager=dict(type='subprocess'),
-    policy=dict(type='dqn'),
+    env_manager=dict(type="subprocess"),
+    policy=dict(type="dqn"),
 )
 mario_dqn_create_config = EasyDict(mario_dqn_create_config)
 create_config = mario_dqn_create_config
