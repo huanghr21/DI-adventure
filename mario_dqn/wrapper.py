@@ -94,7 +94,12 @@ class CoinRewardWrapper(gym.Wrapper):
         self.num_coins = info["coins"]
         return obs, reward, done, info
 
+    def reset(self):
+        self.num_coins = 0
+        return self.env.reset()
 
+
+###
 # our new wrappers
 # 位置进度奖励wrapper
 class PositionRewardWrapper(gym.Wrapper):
@@ -136,22 +141,33 @@ class TimePenaltyWrapper(gym.Wrapper):
     Properties:
         - env (:obj:`gym.Env`): the environment to wrap.
         - ``penalty``: penalty value for not moving
+        - ``tolerance``: frames to tolerate no movement (avoid penalizing normal jumps)
     """
 
-    def __init__(self, env: gym.Env, penalty: float = -0.01):
+    def __init__(self, env: gym.Env, penalty: float = -0.01, tolerance: int = 3):
         super().__init__(env)
         self.penalty = penalty
+        self.tolerance = tolerance
+        self.no_move_count = 0
         self.last_x_pos = 0
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        # 如果位置没变化，施加惩罚
+
+        # 如果位置没变化，累计不动次数
         if info["x_pos"] == self.last_x_pos:
-            reward += self.penalty
+            self.no_move_count += 1
+            # 只有连续多帧不动才惩罚（避免误伤跳跃）
+            if self.no_move_count >= self.tolerance:
+                reward += self.penalty
+        else:
+            self.no_move_count = 0
+
         self.last_x_pos = info["x_pos"]
         return obs, reward, done, info
 
     def reset(self):
+        self.no_move_count = 0
         self.last_x_pos = 0
         return self.env.reset()
 
@@ -196,26 +212,24 @@ class NoProgressWrapper(gym.Wrapper):
         return self.env.reset()
 
 
-# 奖励裁剪wrapper
-class RewardClipWrapper(gym.RewardWrapper):
-    """
-    Overview:
-        Clip reward to specified range for stable training
-    Interface:
-        ``__init__``, ``reward``
-    Properties:
-        - env (:obj:`gym.Env`): the environment to wrap.
-        - ``min_r``: minimum reward value
-        - ``max_r``: maximum reward value
-    """
-
-    def __init__(self, env: gym.Env, min_r: float = -1.0, max_r: float = 1.0):
+# 得分奖励wrapper
+class ScoreRewardWrapper(gym.Wrapper):
+    def __init__(self, env, score_weight=0.05):
         super().__init__(env)
-        self.min_r = min_r
-        self.max_r = max_r
+        self.score_weight = score_weight
+        self.last_score = 0
 
-    def reward(self, reward):
-        return np.clip(reward, self.min_r, self.max_r)
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        score_increase = info["score"] - self.last_score
+        reward += score_increase * self.score_weight
+        self.last_score = info["score"]
+        return obs, reward, done, info
+
+    def reset(self):
+        obs = self.env.reset()
+        self.last_score = 0
+        return obs
 
 
 # 动作平滑wrapper
@@ -243,6 +257,9 @@ class ActionSmoothWrapper(gym.ActionWrapper):
             return_action = action
         self.last_action = action
         return return_action
+
+
+###
 
 
 # CAM相关，不需要了解
